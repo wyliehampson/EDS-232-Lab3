@@ -388,10 +388,10 @@ avg_prop_protected <- mean(repr_data$relative_held)
 
 *The average proportion of features held in protected areas is `r avg_prop_protected`.*
 
-**If we set a target of 10% coverage by protected areas, how many features fail to meet this target (hint: use sum(table$relative_held >= target_value) with the correct table name)?**
+**If we set a target of 10% coverage by protected areas, how many features fail to meet this target (hint: use sum(table$relative_held < target_value) with the correct table name)?**
 
 ```{r}
-miss_target_num <- sum(repr_data$relative_held >= 0.10)
+miss_target_num <- sum(repr_data$relative_held < 0.10)
 miss_target_num
 ```
 
@@ -400,7 +400,7 @@ miss_target_num
 **If we set a target of 20% coverage by protected areas, how many features fail to meet this target?**
 
 ```{r}
-miss_target_num20 <- sum(repr_data$relative_held >= 0.20)
+miss_target_num20 <- sum(repr_data$relative_held < 0.20)
 miss_target_num20
 ```
 
@@ -468,9 +468,12 @@ spplot(s1, "solution_1", col.regions = c("grey80", "darkgreen"), main = "s1",
 
 ```{r}
 eval_n_summary(p1, s1[, "solution_1"])
+
+n <- 15
+prop <- n / nrow(pu_data)
 ```
 
-*15 planing units were selected in the prioritization.*
+*15 planing units were selected in the prioritization. The proportion is `r prop`.*
 
 **Is there a pattern in the spatial distribution of the priority areas?**
 
@@ -605,15 +608,15 @@ eval_n_summary(p4, s4[, "solution_1"])
 
 **Do the solutions with more planning units have a greater cost? Why (or why not)?**
 
-*Yes they do, because generally the higher number of planning units would mean higher cost.*
+*Yes they do, because generally the higher number of planning units would mean higher cost. Each planning unit has a cost associated with it, so even a low cost planning unit would add to overall cost, so the more planning units, the higher the cost, in general.*
 
 **Why does the first solution (s1) cost less than the second solution with protected areas locked into the solution (s2)?**
 
-**
+*The first solution (s1) cost less than the second solution (s2) because the second solution we added the planning units that had existing protected areas. Many of these planning units had high cost assoiated with them so by adding that many new planning units to the solution the cost went up.*
 
 **Why does the third solution (s3) cost less than the fourth solution solution with highly degraded areas locked out (s4)?**
 
-**
+*The third solution (s3) cost less than the fourth solution (s4) because s3 contained degraded areas that would've had low costs associated with them. So by locking those areas out of the problem for s4, more valued planning units are selected, which raises the cost.*
 
 ### Penalizing Fragmentation
 
@@ -653,12 +656,89 @@ spplot(s5, "solution_1", col.regions = c("grey80", "darkgreen"), main = "s5",
 
 **What is the cost the fourth (s4) and fifth (s5) solutions? Why does the fifth solution (s5) cost more than the fourth (s4) solution?**
 
-**
+```{r}
+eval_cost_summary(p4, s4[, "solution_1"])
+eval_cost_summary(p5, s5[, "solution_1"])
+```
+
+*The cost of the fourth solution is $6711.58 mil and the cost of the fifth solution is $6747.59 mil. The reason why the fifth solution costs more is because we gave it a penalty for having fragmented planning units. So in order to correct for this fragmentation is had to select more planning units which added to the cost.*
 
 **Try setting the penalty value to 0.000000001 (i.e. 1e-9) instead of 0.001. What is the cost of the solution now? Is it different from the fourth solution (s4) (hint: try plotting the solutions to visualize them)? Is this is a useful penalty value? Why (or why not)?**
 
-**
+```{r}
+p6_rds <- file.path(dir_data, "p6.rds")
+if (!file.exists(p6_rds)){
+  p6 <- problem(pu_data, veg_data, cost_column = "cost") %>%
+    add_min_set_objective() %>%
+    add_boundary_penalties(penalty = 0.000000001) %>%
+    add_relative_targets(0.1) %>%
+    add_locked_in_constraints("locked_in") %>%
+    add_locked_out_constraints("locked_out") %>%
+    add_binary_decisions() %>%
+    add_lpsymphony_solver()
+  saveRDS(p6, p6_rds)
+}
+p6 <- readRDS(p6_rds)
+
+# print problem
+print(p6)
+
+# solve problem,
+# note this will take a bit longer than the previous runs
+s6 <- solve(p6)
+
+# print solution
+print(s6)
+```
+
+```{r}
+eval_cost_summary(p6, s6[, "solution_1"])
+
+spplot(s4, "solution_1", col.regions = c("grey80", "darkgreen"), main = "s4",
+       colorkey = FALSE)
+
+spplot(s6, "solution_1", col.regions = c("grey80", "darkgreen"), main = "s6",
+       colorkey = FALSE)
+```
+
+*This new solution costs $6711.76 mil, which is extremely similar to the fourth solution (s4). The reason for this is because the penalty value is so low that it doesn't force the solution to select more planning units than s4 to get rid of fragmentation. We can see the two plots above (s4 and the new one I'm calling s6) are very similar in terms of how many planning units there are. This is not a useful penalty value because it causes very little change from having no penalty value at all. It needs to be raised to a higher value.*
 
 **Try setting the penalty value to 0.5. What is the cost of the solution now? Is it different from the fourth solution (s4) (hint: try plotting the solutions to visualize them)? Is this a useful penalty value? Why (or why not)?**
 
-**
+```{r}
+p7_rds <- file.path(dir_data, "p7.rds")
+if (!file.exists(p7_rds)){
+  p7 <- problem(pu_data, veg_data, cost_column = "cost") %>%
+    add_min_set_objective() %>%
+    add_boundary_penalties(penalty = 0.5) %>%
+    add_relative_targets(0.1) %>%
+    add_locked_in_constraints("locked_in") %>%
+    add_locked_out_constraints("locked_out") %>%
+    add_binary_decisions() %>%
+    add_lpsymphony_solver()
+  saveRDS(p7, p7_rds)
+}
+p7 <- readRDS(p7_rds)
+
+# print problem
+print(p7)
+
+# solve problem,
+# note this will take a bit longer than the previous runs
+s7 <- solve(p7)
+
+# print solution
+print(s7)
+```
+
+```{r}
+eval_cost_summary(p7, s7[, "solution_1"])
+
+spplot(s4, "solution_1", col.regions = c("grey80", "darkgreen"), main = "s4",
+       colorkey = FALSE)
+
+spplot(s7, "solution_1", col.regions = c("grey80", "darkgreen"), main = "s7",
+       colorkey = FALSE)
+```
+
+*The cost of this new solution, that I'm calling s7, is $9816.64 mil, which is MUCH higher than s4. The reason for this is because the penalty value is so high the solution has to select a ton of planning units to make sure that there is little to no fragmentation. This greatly raises the cost. This is also a useless penalty value because it prioritizes eliminating fragmentation too much at too high of a cost. Here the penalty value should be lowered (but obviously not as low as the previous question).*
